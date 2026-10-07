@@ -1,0 +1,98 @@
+@import 'tailwindcss';
+
+/* Palette taken from the live gvnsafestart.com: gold #caa649 on near-black
+   surfaces, with warm cream highlights. Single dark theme, no light mode, which
+   is what the real site uses and what the gold logo needs to read correctly.
+
+   Contrast notes, measured rather than assumed:
+   - gold 500 on surface 950 is roughly 8:1, so gold is safe for body text here
+   - white on gold is only about 2.2:1, so gold-filled controls take near-black
+     labels, never white */
+@theme {
+  --font-sans:
+    'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
+
+  --color-accent-200: #ecdcae;
+  --color-accent-300: #e4d2a4;
+  --color-accent-400: #d9bc72;
+  --color-accent-500: #caa649;
+  --color-accent-600: #b08f37;
+  --color-accent-700: #8c7029;
+  --color-accent-900: #4a3a14;
+
+  --color-surface-950: #0d0d0d;
+  --color-surface-900: #121212;
+  --color-surface-800: #171717;
+  --color-surface-700: #292929;
+  --color-surface-600: #3a3a3a;
+
+  --color-cream-50: #fcfaf4;
+  --color-cream-100: #f7f2e4;
+
+  --color-ink-100: #f5f5f5;
+  --color-ink-400: #a3a3a3;
+  --color-ink-500: #8a8a8a;
+
+  /* Status colour for form errors only, not a second accent. About 7:1 on
+     surface 950. */
+  --color-danger-300: #f4a3a3;
+  --color-danger-500: #c24141;
+
+  --radius-surface: 0.75rem;
+}
+
+@layer components {
+  /* The site's own dark sweep, the one place red appears in the brand. */
+  .brand-gradient {
+    background-image: linear-gradient(
+      135deg,
+      var(--color-surface-950) 0%,
+      #3b0c0c 50%,
+      var(--color-surface-950) 100%
+    );
+  }
+
+  /* Their gold hairline divider. */
+  .gold-rule {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-accent-500),
+      transparent
+    );
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    color-scheme: dark;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    @apply bg-surface-950 text-ink-100 antialiased;
+    font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    @apply outline-accent-500 outline-2 outline-offset-2;
+  }
+
+  ::selection {
+    @apply bg-accent-500/30;
+  }
+}
