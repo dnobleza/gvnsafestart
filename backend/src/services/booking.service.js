@@ -6,7 +6,7 @@ const { dateRange } = require('../utils/timezone');
 
 const ADMIN_SCOPE = {};
 
-const list = async ({ page, limit, status, from, to, client, instructorId, branchId, actionBy }) => {
+const list = async ({ page, limit, status, from, to, client, instructorId, branchId, actionBy, completedBy, cashUnpaid }) => {
   const { rows, total } = await bookingRepository.list({
     page,
     limit,
@@ -15,6 +15,8 @@ const list = async ({ page, limit, status, from, to, client, instructorId, branc
     instructorId,
     branchId,
     actionBy,
+    completedBy,
+    cashUnpaid,
     range: dateRange({ from, to }, config.timezone),
   });
   return { data: rows.map(forAdmin), meta: { page, limit, total } };

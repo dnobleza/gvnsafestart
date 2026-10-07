@@ -5,7 +5,7 @@ import { addClientNote } from '../../api/instructor';
 import Button from '../../components/Button';
 import FormAlert from '../../components/FormAlert';
 import PageHeader from '../../components/PageHeader';
-import StatusBadge from '../../components/StatusBadge';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import SubmitButton from '../../components/SubmitButton';
 import useAction from '../../hooks/useAction';
 import { formatDateTime } from '../../utils/format';
@@ -97,7 +97,7 @@ export default function ClientDetailPage() {
                         <span className="text-ink-100 block text-sm">{formatDateTime(b.scheduledAt)}</span>
                         <span className="text-ink-500 block text-xs">{b.lessonType}</span>
                       </span>
-                      <StatusBadge status={b.status} />
+                      <BookingStatusBadge booking={b} />
                     </Link>
                   </li>
                 ))}

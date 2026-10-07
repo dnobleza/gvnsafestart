@@ -40,6 +40,9 @@ describe('GET /api/v1/admin/bookings', () => {
       lastAction: null,
       rated: false,
       package: null,
+      autoCompleted: false,
+      autoCompletedAt: null,
+      cashUnpaid: false,
       client: { id: client.id, fullName: 'Ana Reyes', email: client.email, phone: '+639171234567' },
     });
   });

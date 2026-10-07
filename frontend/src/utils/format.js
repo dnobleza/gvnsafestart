@@ -49,6 +49,9 @@ export const addDaysToDate = (isoDate, days) => {
   return next.toISOString().slice(0, 10);
 };
 
+// Must match the reason the API's auto-complete job writes.
+export const NOT_CONFIRMED_REASON = 'Not confirmed before session start';
+
 export const ROLE_LABEL = { ADMIN: 'Admin', INSTRUCTOR: 'Instructor', CLIENT: 'Client', SYSTEM: 'System' };
 
 export const ACTION_LABEL = {
@@ -66,7 +69,34 @@ export const ACTION_LABEL = {
 export const actorLabel = (name, role) =>
   role === 'SYSTEM' ? 'System' : `${name || 'A removed user'} (${ROLE_LABEL[role] || role})`;
 
-export const describeAction = (action) =>
-  action
-    ? `${ACTION_LABEL[action.action] || action.action} by ${actorLabel(action.actorName, action.actorRole)} · ${formatDateTime(action.at)}`
-    : null;
+const isAutoCompletion = (action, role) => action === 'COMPLETED' && role === 'SYSTEM';
+
+// "Completed automatically · Oct 7, 4:00 PM" for the system's completions.
+export const describeAction = (action) => {
+  if (!action) return null;
+  if (isAutoCompletion(action.action, action.actorRole)) return `Completed automatically · ${formatDateTime(action.at)}`;
+  return `${ACTION_LABEL[action.action] || action.action} by ${actorLabel(action.actorName, action.actorRole)} · ${formatDateTime(action.at)}`;
+};
+
+export const historyLabel = (entry) =>
+  isAutoCompletion(entry.action, entry.actorRole) ? 'Completed automatically' : ACTION_LABEL[entry.action] || entry.action;
+
+// "2h 5m", "45m"
+export const formatDuration = (ms) => {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (!h) return `${m}m`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+};
+
+export const autoCompletedNote = (booking) =>
+  `Completed automatically ${formatDuration(new Date(booking.autoCompletedAt) - new Date(booking.endsAt))} after the session ended`;
+
+// "19h left to correct"
+export const timeLeft = (until, now = Date.now()) => {
+  const ms = new Date(until) - now;
+  if (ms <= 0) return null;
+  const hours = Math.floor(ms / 3600000);
+  return hours >= 1 ? `${hours}h left` : `${Math.max(1, Math.ceil(ms / 60000))}m left`;
+};

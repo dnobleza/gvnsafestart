@@ -25,6 +25,7 @@ router.patch('/bookings/:id/reschedule', validate(schemas.rescheduleSchema), asy
 router.patch('/bookings/:id/complete', validate(schemas.bookingActionSchema), asyncHandler(bookings.complete));
 router.patch('/bookings/:id/no-show', validate(schemas.bookingActionSchema), asyncHandler(bookings.noShow));
 router.patch('/bookings/:id/cancel', validate(schemas.cancelSchema), asyncHandler(bookings.cancel));
+router.patch('/bookings/:id/correct-no-show', validate(schemas.correctNoShowSchema), asyncHandler(bookings.correctNoShow));
 router.post('/bookings/:id/cash', validate(schemas.cashSchema), asyncHandler(bookings.recordCash));
 
 router.get('/schedule', validate(schemas.scheduleSchema), asyncHandler(bookings.schedule));

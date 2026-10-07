@@ -77,7 +77,15 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" description="Booking and payment rules for every client." />
+      <PageHeader
+        title="Settings"
+        description="Booking and payment rules for every client."
+        actions={
+          <Button variant="secondary" size="sm" to="/admin/settings/auto-complete">
+            Auto-complete
+          </Button>
+        }
+      />
       <div className="mb-6">
         <PaymentProviderCard />
       </div>

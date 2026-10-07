@@ -77,6 +77,12 @@ vi.mock('../src/api/admin', () => ({
   reviewVoidRequest: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+  getAutoCompleteStatus: vi.fn(),
+  listAutoCompleteRuns: vi.fn(),
+  runAutoCompleteNow: vi.fn(),
+  listNotifications: vi.fn(),
+  markNotificationRead: vi.fn(),
+  markAllNotificationsRead: vi.fn(),
 }));
 
 const admin = { id: 'a1', email: 'admin@test.local', fullName: 'Ada Admin', role: 'ADMIN', mustChangePassword: false };
@@ -111,6 +117,7 @@ const booking = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  adminApi.listNotifications.mockResolvedValue({ data: [], meta: { page: 1, limit: 5, total: 0, unread: 0 } });
   authApi.refresh.mockRejectedValue(new Error('no session'));
   resetAuthBootstrap();
   useAuthStore.setState({ user: null, accessToken: null, status: 'checking' });

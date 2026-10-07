@@ -18,6 +18,8 @@ const KINDS = {
   COMPLETE: { action: 'COMPLETED', from: ['CONFIRMED'], to: 'COMPLETED', afterStart: true },
   NO_SHOW: { action: 'NO_SHOW', from: ['CONFIRMED'], to: 'NO_SHOW', afterStart: true },
   CANCEL: { action: 'CANCELLED', from: OPEN_STATUSES, to: 'CANCELLED' },
+  // Only for a session the system completed; the caller checks the window.
+  CORRECT_NO_SHOW: { action: 'NO_SHOW', from: ['COMPLETED'], to: 'NO_SHOW', audit: 'BOOKING_NO_SHOW_CORRECTED' },
 };
 
 const ACTOR_LABEL = { ADMIN: 'an admin', INSTRUCTOR: 'the instructor', CLIENT: 'the client', SYSTEM: 'the system' };
@@ -119,67 +121,69 @@ const touch = (tx, booking, actor, extra = {}) =>
     tx,
   );
 
-// The single write path for booking state. One transaction covers the status
-// change, last-action stamp, history row, audit row and in-app notifications;
-// emails go out only after it commits, and a failed email is logged, not thrown.
-const run = async ({ kind, bookingId, actor, scope, reason, scheduledAt, meta }) => {
+// The single write path for booking state, inside the caller's transaction:
+// status change, last-action stamp, history row, audit row and in-app
+// notifications. Returns the emails to send once the transaction commits.
+// `changes` adds extra columns to the same conditional update.
+const runInTx = async (tx, { kind, bookingId, actor, scope, reason, scheduledAt, meta, changes: extra }) => {
   const def = KINDS[kind];
+  const before = await bookingRepository.findScoped(bookingId, scope, tx);
+  if (!before) throw notFound();
+  if (!def.from.includes(before.status)) throw invalidTransition(before.status);
+  if (def.afterStart && Date.now() < before.scheduledAt.getTime()) {
+    throw AppError.badRequest('SESSION_NOT_STARTED', 'This can only be done after the session start time');
+  }
+  await assertClientCutoff(kind, actor, before);
 
-  const { booking, emails } = await prisma.$transaction(async (tx) => {
-    const before = await bookingRepository.findScoped(bookingId, scope, tx);
-    if (!before) throw notFound();
-    if (!def.from.includes(before.status)) throw invalidTransition(before.status);
-    if (def.afterStart && Date.now() < before.scheduledAt.getTime()) {
-      throw AppError.badRequest('SESSION_NOT_STARTED', 'This can only be done after the session start time');
+  const changes = { lastActionById: actor.id, lastActionAt: new Date(), ...extra };
+  if (def.to) changes.status = def.to;
+  if (kind === 'CANCEL') changes.cancelReason = reason;
+  if (kind === 'RESCHEDULE') {
+    if (scheduledAt.getTime() === before.scheduledAt.getTime()) {
+      throw AppError.badRequest('SAME_TIME', 'The new time is the same as the current one');
     }
-    await assertClientCutoff(kind, actor, before);
-
-    const changes = { lastActionById: actor.id, lastActionAt: new Date() };
-    if (def.to) changes.status = def.to;
-    if (kind === 'CANCEL') changes.cancelReason = reason;
-    if (kind === 'RESCHEDULE') {
-      if (scheduledAt.getTime() === before.scheduledAt.getTime()) {
-        throw AppError.badRequest('SAME_TIME', 'The new time is the same as the current one');
-      }
-      if (before.instructorId) {
-        await availabilityService.assertSlotFree(tx, {
-          instructorId: before.instructorId,
-          start: scheduledAt,
-          durationMinutes: before.durationMinutes,
-          excludeId: before.id,
-        });
-      }
-      changes.scheduledAt = scheduledAt;
+    if (before.instructorId) {
+      await availabilityService.assertSlotFree(tx, {
+        instructorId: before.instructorId,
+        start: scheduledAt,
+        durationMinutes: before.durationMinutes,
+        excludeId: before.id,
+      });
     }
+    changes.scheduledAt = scheduledAt;
+  }
 
-    const count = await bookingRepository.updateIfStatus(before.id, def.from, changes, tx);
-    if (count === 0) throw invalidTransition(before.status);
+  const count = await bookingRepository.updateIfStatus(before.id, def.from, changes, tx);
+  if (count === 0) throw invalidTransition(before.status);
 
-    const rescheduled = kind === 'RESCHEDULE';
-    await addHistory(tx, before, actor, {
-      action: def.action,
-      toStatus: def.to || before.status,
-      oldScheduledAt: rescheduled ? before.scheduledAt : null,
-      newScheduledAt: rescheduled ? scheduledAt : null,
-      reason: reason || null,
-    });
-
-    await auditService.record(tx, {
-      actor,
-      action: `BOOKING_${def.action}`,
-      targetType: 'BOOKING',
-      targetId: before.id,
-      metadata: rescheduled
-        ? { from: before.scheduledAt.toISOString(), to: scheduledAt.toISOString(), reason }
-        : { from: before.status, to: def.to, ...(reason ? { reason } : {}) },
-      meta,
-    });
-
-    const after = await bookingRepository.findById(before.id, tx);
-    const mails = await notificationService.notify(tx, messagesFor(kind, before, after, actor, reason));
-    return { booking: after, emails: mails };
+  const rescheduled = kind === 'RESCHEDULE';
+  await addHistory(tx, before, actor, {
+    action: def.action,
+    toStatus: def.to || before.status,
+    oldScheduledAt: rescheduled ? before.scheduledAt : null,
+    newScheduledAt: rescheduled ? scheduledAt : null,
+    reason: reason || null,
   });
 
+  await auditService.record(tx, {
+    actor,
+    action: def.audit || `BOOKING_${def.action}`,
+    targetType: 'BOOKING',
+    targetId: before.id,
+    metadata: rescheduled
+      ? { from: before.scheduledAt.toISOString(), to: scheduledAt.toISOString(), reason }
+      : { from: before.status, to: def.to, ...(reason ? { reason } : {}) },
+    meta,
+  });
+
+  const after = await bookingRepository.findById(before.id, tx);
+  const mails = await notificationService.notify(tx, messagesFor(kind, before, after, actor, reason));
+  return { before, booking: after, emails: mails };
+};
+
+// Emails go out only after the transaction commits; a failed email is logged, not thrown.
+const run = async (args) => {
+  const { booking, emails } = await prisma.$transaction((tx) => runInTx(tx, args));
   await emailService.sendAll(emails);
   return booking;
 };
@@ -270,4 +274,4 @@ const history = async (bookingId, scope) => {
   return bookingHistoryRepository.listForBooking(bookingId);
 };
 
-module.exports = { KINDS, SYSTEM_ACTOR, run, create, createInTx, history, addHistory, touch, notFound, priceFor };
+module.exports = { KINDS, SYSTEM_ACTOR, run, runInTx, create, createInTx, history, addHistory, touch, notFound, priceFor };

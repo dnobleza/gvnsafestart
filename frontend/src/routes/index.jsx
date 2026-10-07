@@ -8,6 +8,8 @@ import OverviewPage from '../features/admin/OverviewPage';
 import PaymentsPage from '../features/admin/PaymentsPage';
 import AdminRatingsPage from '../features/admin/RatingsPage';
 import SettingsPage from '../features/admin/SettingsPage';
+import AutoCompletePage from '../features/admin/AutoCompletePage';
+import AdminNotificationsPage from '../features/admin/AdminNotificationsPage';
 import AdminPackagesPage from '../features/admin/PackagesPage';
 import AdminsPage from '../features/admin/AdminsPage';
 import BranchesPage from '../features/admin/BranchesPage';
@@ -103,6 +105,8 @@ export default function AppRoutes() {
             <Route path="admins" element={<AdminsPage />} />
             <Route path="audit-log" element={<AuditLogPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings/auto-complete" element={<AutoCompletePage />} />
+            <Route path="notifications" element={<AdminNotificationsPage />} />
           </Route>
         </Route>
       </Route>

@@ -6,6 +6,7 @@ import { toApiError } from '../../api/client';
 import Button from '../../components/Button';
 import PageHeader from '../../components/PageHeader';
 import ReasonDialog from '../../components/ReasonDialog';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDateTime, formatMoney, formatTime } from '../../utils/format';
 import { startPackagePayment } from './checkout';
@@ -180,7 +181,7 @@ export default function PackageDetailPage() {
                           <span className="text-ink-100 block text-sm">Session {s.sessionNumber}</span>
                           <span className="text-ink-500 block text-xs">{formatDateTime(s.scheduledAt)}</span>
                         </span>
-                        <StatusBadge status={s.status} />
+                        <BookingStatusBadge booking={s} />
                       </Link>
                     </li>
                   ))}

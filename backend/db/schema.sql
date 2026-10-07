@@ -588,6 +588,35 @@ DROP SEQUENCE IF EXISTS official_receipt_seq;
 CREATE UNIQUE INDEX IF NOT EXISTS payments_cash_reference_key
   ON payments (reference) WHERE method = 'Cash' AND reference IS NOT NULL;
 
+-- --------------------------------------------------------- auto-complete
+
+-- The system completes confirmed sessions after they end; auto_completed_at
+-- opens the instructor's 24-hour window to correct one to a no-show.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS auto_completed    boolean NOT NULL DEFAULT false;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS auto_completed_at timestamptz;
+CREATE INDEX IF NOT EXISTS bookings_auto_completed_at_idx ON bookings (auto_completed_at);
+
+-- A rating on a session corrected to a no-show stays on record but no longer
+-- counts towards any average.
+ALTER TABLE ratings ADD COLUMN IF NOT EXISTS excluded_at timestamptz;
+
+CREATE TABLE IF NOT EXISTS cron_runs (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  job               text        NOT NULL,
+  trigger           text        NOT NULL,
+  status            text        NOT NULL,
+  started_at        timestamptz NOT NULL DEFAULT now(),
+  finished_at       timestamptz,
+  completed_count   integer     NOT NULL DEFAULT 0,
+  cancelled_count   integer     NOT NULL DEFAULT 0,
+  cash_unpaid_count integer     NOT NULL DEFAULT 0,
+  error             text
+);
+CREATE INDEX IF NOT EXISTS cron_runs_job_started_at_idx ON cron_runs (job, started_at DESC);
+
+INSERT INTO app_settings (key, value) VALUES ('autoCompleteGraceHours', '2')
+ON CONFLICT (key) DO NOTHING;
+
 -- ------------------------------------------------------------- triggers
 
 DO $$

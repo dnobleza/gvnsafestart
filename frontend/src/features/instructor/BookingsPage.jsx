@@ -4,11 +4,13 @@ import DataTable from '../../components/DataTable';
 import FilterBar from '../../components/FilterBar';
 import PageHeader from '../../components/PageHeader';
 import Pagination from '../../components/Pagination';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import StatusBadge from '../../components/StatusBadge';
 import useListParams from '../../hooks/useListParams';
 import { formatDateTime } from '../../utils/format';
 import BookingActions from './BookingActions';
 import { STATUS_OPTIONS } from './bookingRules';
+import useBookingRefresh from '../../hooks/useBookingRefresh';
 import { useMyBookings } from './hooks/useInstructorResources';
 
 const FILTER_KEYS = ['from', 'to', 'status'];
@@ -16,6 +18,7 @@ const FILTER_KEYS = ['from', 'to', 'status'];
 export default function BookingsPage() {
   const { filters, page, setFilter, setPage, resetFilters } = useListParams(FILTER_KEYS);
   const { data, meta, loading, error, refetch } = useMyBookings(filters, page);
+  useBookingRefresh(refetch);
 
   const columns = [
     {
@@ -48,7 +51,7 @@ export default function BookingsPage() {
       header: 'Status',
       render: (b) => (
         <div className="flex flex-wrap gap-1.5">
-          <StatusBadge status={b.status} />
+          <BookingStatusBadge booking={b} />
           {['CONFIRMED', 'COMPLETED'].includes(b.status) ? <StatusBadge status={b.paymentStatus} /> : null}
         </div>
       ),

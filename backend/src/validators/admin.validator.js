@@ -41,6 +41,8 @@ const bookingsListSchema = {
         instructorId: z.string().uuid().optional(),
         branchId: z.string().uuid().optional(),
         actionBy: z.enum(['ADMIN', 'INSTRUCTOR', 'CLIENT']).optional(),
+        completedBy: z.enum(['SYSTEM', 'INSTRUCTOR', 'ADMIN']).optional(),
+        cashUnpaid: z.enum(['true']).transform(() => true).optional(),
       })
       .strict(),
   ),
@@ -220,6 +222,12 @@ const settingsGetSchema = { query: z.object({}).strict() };
 
 const paymentProviderTestSchema = { ...emptyBody };
 
+const autoCompleteStatusSchema = { query: z.object({}).strict() };
+
+const autoCompleteRunsSchema = { query: z.object({ ...pagination }).strict() };
+
+const autoCompleteRunSchema = { ...emptyBody };
+
 const settingsUpdateSchema = {
   body: z
     .object({
@@ -228,6 +236,7 @@ const settingsUpdateSchema = {
       cashAutoCancelHours: z.number().int().min(0).max(168).optional(),
       pricePerHour: z.number().positive().max(100000).optional(),
       reservationFee: z.number().min(0).max(100000).optional(),
+      autoCompleteGraceHours: z.number().int().min(0).max(72).optional(),
     })
     .strict()
     .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one setting to update' }),
@@ -244,6 +253,9 @@ const auditListSchema = {
 };
 
 module.exports = {
+  autoCompleteStatusSchema,
+  autoCompleteRunsSchema,
+  autoCompleteRunSchema,
   overviewSchema,
   paymentsListSchema,
   bookingsListSchema,

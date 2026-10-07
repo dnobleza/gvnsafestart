@@ -12,6 +12,8 @@ import {
   listPayments,
   listRatings,
   listVoidRequests,
+  getAutoCompleteStatus,
+  listAutoCompleteRuns,
 } from '../../../api/admin';
 import useResource from '../../../hooks/useResource';
 import { PAGE_SIZE } from '../../../hooks/useListParams';
@@ -48,5 +50,11 @@ export const useBookingHistory = (id) => useResource(fetchHistory, { id }, { ena
 export const useInstructorOptions = () => useResource(fetchInstructorOptions);
 
 export const useRatings = (filters, page) => useResource(listRatings, withPage(filters, page));
+
+export const useCashUnpaid = (page) => useResource(listBookings, { cashUnpaid: 'true', page, limit: PAGE_SIZE });
+
+export const useAutoCompleteStatus = () => useResource(getAutoCompleteStatus);
+
+export const useAutoCompleteRuns = (page) => useResource(listAutoCompleteRuns, { page, limit: PAGE_SIZE });
 
 export const useVoidRequests = (filters, page) => useResource(listVoidRequests, withPage(filters, page));

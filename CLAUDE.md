@@ -116,7 +116,8 @@ npm run build
 - Handle loading, empty, and error states for every data view.
 - Don't put server data in Zustand; keep it in the feature hook.
 - Use environment variables via `import.meta.env.VITE_*` only; never put secrets in the frontend.
-- One accent colour across the whole UI (`--color-accent-*`, currently emerald). A second accent anywhere breaks the system.
+- One accent colour across the whole UI (`--color-accent-*`, gold). A second accent anywhere breaks the system.
+- Exception: booking status badges use `--color-status-*` (pending yellow, confirmed blue, completed green; no-show gray, cancelled red via danger). Only `StatusBadge` may use them, never buttons, links or highlights.
 - One radius scale: `rounded-xl` on surfaces, `rounded-full` on controls.
 - Buttons always come from `components/Button.jsx`. On a filled accent background use `variant="inverse"`, never an ad-hoc `className` colour override, which silently loses to the variant classes.
 

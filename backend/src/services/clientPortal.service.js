@@ -11,6 +11,7 @@ const onlinePayment = require('./onlinePayment.service');
 const ratingService = require('./rating.service');
 const settingsService = require('./settings.service');
 const packageService = require('./package.service');
+const autoComplete = require('./autoComplete.service');
 const { forClient, historyEntry } = require('./bookingView');
 
 const DAY_MS = 86400000;
@@ -68,6 +69,7 @@ const listMine = async (actor, { page, limit, tab }) => {
 };
 
 const dashboard = async (actor) => {
+  await autoComplete.runForUser(actor.id);
   const now = new Date();
   const mine = { clientId: actor.id };
   const upcomingWhere = { ...mine, status: { in: OPEN }, scheduledAt: { gte: now } };

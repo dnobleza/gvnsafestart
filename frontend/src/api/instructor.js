@@ -21,6 +21,8 @@ export const markNoShow = (id) => patch(`/instructor/bookings/${id}/no-show`);
 
 export const cancelBooking = (id, reason) => patch(`/instructor/bookings/${id}/cancel`, { reason });
 
+export const correctNoShow = (id, reason) => patch(`/instructor/bookings/${id}/correct-no-show`, { reason });
+
 export const recordCash = (id, body) => post(`/instructor/bookings/${id}/cash`, body);
 
 export const getSchedule = (params) => get('/instructor/schedule', params).then((d) => d.bookings);

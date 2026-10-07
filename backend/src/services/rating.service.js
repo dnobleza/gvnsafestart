@@ -147,6 +147,7 @@ const forAdmin = async ({ page, limit, instructorId, branchId }) => {
       stars: r.stars,
       comment: r.comment,
       isHidden: r.isHidden,
+      excluded: Boolean(r.excludedAt),
       createdAt: r.createdAt,
       client: r.client,
       instructor: { id: r.instructor.id, fullName: r.instructor.fullName, branch: branchOf(r.instructor) },

@@ -187,6 +187,7 @@ describe('admin settings and branch coordinates', () => {
       cashAutoCancelHours: 12,
       pricePerHour: 800,
       reservationFee: 1000,
+      autoCompleteGraceHours: 2,
     });
 
     const res = await request(app).patch('/api/v1/admin/settings').set(auth(admin)).send({ pricePerHour: 950 });

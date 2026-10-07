@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import Button from '../../components/Button';
 import HistoryTimeline from '../../components/HistoryTimeline';
 import PageHeader from '../../components/PageHeader';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import StatusBadge from '../../components/StatusBadge';
 import { describeAction, formatDateTime, formatMoney } from '../../utils/format';
 import { useBooking, useBookingHistory } from './hooks/useAdminResources';
@@ -48,7 +49,7 @@ export default function BookingDetailPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="border-surface-700 bg-surface-900 rounded-xl border p-5">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <StatusBadge status={b.status} />
+              <BookingStatusBadge booking={b} />
               <StatusBadge status={b.paymentStatus} />
             </div>
             {b.lastAction ? <p className="text-ink-500 mb-3 text-xs">{describeAction(b.lastAction)}</p> : null}

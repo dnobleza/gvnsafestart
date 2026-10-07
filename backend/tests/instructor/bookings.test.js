@@ -381,6 +381,8 @@ describe('GET /instructor/dashboard', () => {
     await bookFor(client, instructor, { status: 'CANCELLED', scheduledAt: soon });
     await bookFor(client, instructor, { scheduledAt: at(dayAhead(3), '10:00') });
     await bookFor(client, instructor, { scheduledAt: at(dayAhead(20), '10:00') });
+    // A long grace period keeps the dashboard's auto-complete from settling this one.
+    await prisma.appSetting.create({ data: { key: 'autoCompleteGraceHours', value: 72 } });
     await bookFor(client, instructor, { status: 'CONFIRMED', scheduledAt: new Date(Date.now() - 50 * HOUR) });
 
     const first = await request(app).get('/api/v1/instructor/dashboard').set(auth(instructor));

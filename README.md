@@ -55,6 +55,7 @@ GVN-Safestart is a booking platform for a driving school. Clients sign up, pick 
 | Geocoding | OpenStreetMap Nominatim | Reverse geocoding for "Use my current location" |
 | Security | helmet, cors, express-rate-limit | Headers, single-origin CORS, rate limits |
 | Logging | winston | Structured request and app logs |
+| Scheduling | node-cron | Runs auto-complete every 15 minutes (Asia/Manila) when `ENABLE_CRON=true` |
 | Frontend | React 18 + Vite | SPA |
 | Routing | React Router 7 | Pages and role guards |
 | HTTP | axios | Single client with bearer token and 401 → refresh → retry |
@@ -89,7 +90,7 @@ GVN-Safestart is a booking platform for a driving school. Clients sign up, pick 
 │   │   ├── repositories/     # data access only
 │   │   ├── middlewares/      # auth, roles, validation, rate limit, errors
 │   │   ├── validators/       # zod request schemas
-│   │   ├── jobs/             # bookingSweeper (auto-cancel unpaid / unconfirmed)
+│   │   ├── jobs/             # bookingSweeper (auto-cancel unpaid / unconfirmed), autoCompleteJob (node-cron)
 │   │   ├── utils/            # AppError, asyncHandler, geo, timezone, temp passwords
 │   │   └── app.js            # express app
 │   ├── tests/                # Jest + Supertest
@@ -164,7 +165,9 @@ Create `backend/.env` and `frontend/.env` with the variables below (`.env*` file
 | `GEOCODER_PROVIDER` | `nominatim` or `off` |
 | `GEOCODER_BASE_URL` | Nominatim base URL |
 | `GEOCODER_CONTACT_EMAIL` | Contact email required by the Nominatim usage policy |
-| `APP_TIMEZONE` | IANA zone for slots, "today" and receipt years (default `Asia/Manila`) |
+| `APP_TIMEZONE` | IANA zone for slots, "today", receipt years and the auto-complete schedule (default `Asia/Manila`) |
+| `ENABLE_CRON` | `true` starts the 15-minute auto-complete schedule in this process (default `false`) |
+| `CRON_SECRET` | Bearer secret for `POST /cron/auto-complete` (min 16 chars). Unset means the endpoint always returns 401 |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | First admin account created by the seed |
 
 **Frontend**
@@ -192,6 +195,16 @@ cd backend && npm run dev      # http://localhost:4000/api/v1
 # terminal 2
 cd frontend && npm run dev     # http://localhost:5173
 ```
+
+### After pulling the auto-complete feature
+
+```bash
+cd backend
+npm install                 # adds node-cron
+npm run prisma:migrate      # applies 8_auto_complete
+```
+
+Then add `ENABLE_CRON=true` and a `CRON_SECRET` to `backend/.env` if this instance should run the schedule or accept external triggers.
 
 ### Dev helpers
 
@@ -384,15 +397,31 @@ stateDiagram-v2
 
 - Cutoff: clients cannot cancel or reschedule within `clientChangeCutoffHours` of the session.
 - Reschedule and cancel require a reason.
-- COMPLETED, NO_SHOW and CANCELLED are final.
+- COMPLETED, NO_SHOW and CANCELLED are final, with one exception: an instructor can turn a session **the system** completed into NO_SHOW within 24 hours (see below).
 - Transitions use a conditional update; a stale action returns `INVALID_BOOKING_TRANSITION`.
+
+**Auto-complete** (`runAutoComplete()` in `src/services/autoComplete.service.js`):
+
+| Rule | Result |
+|---|---|
+| CONFIRMED and session end + `autoCompleteGraceHours` (default 2) has passed | COMPLETED by SYSTEM, `auto_completed = true`, history reason "Auto-completed after session end". Client: "How was your session? Rate your instructor." Instructor: "Session with [client] was marked completed." |
+| …and it is a cash booking not yet paid | Still completed, counted as *cash unpaid*; the instructor also gets "Cash not recorded for [client]'s session." |
+| PENDING and its start time has passed | CANCELLED by SYSTEM, reason "Not confirmed before session start"; client and instructor notified |
+| COMPLETED, NO_SHOW, CANCELLED | Never touched |
+
+- One transaction per run; rows are taken with `FOR UPDATE SKIP LOCKED` in batches of 200. Re-running finds nothing already handled.
+- Triggers: node-cron every 15 minutes when `ENABLE_CRON=true` (guarded by `pg_try_advisory_xact_lock`, so only one instance processes and the others record SKIPPED), `POST /api/v1/cron/auto-complete` with `Authorization: Bearer $CRON_SECRET`, and the admin **Run now** button. Each writes a `cron_runs` row.
+- Backup: loading the client or instructor dashboard first runs the same rules for that user's bookings only (not recorded in `cron_runs`).
+- Emails go out after commit; failures are logged and never fail the run.
+
+**Correction window.** Within 24 hours of auto-completion the instructor can mark the session NO_SHOW (`PATCH /instructor/bookings/:id/correct-no-show`, reason required, two-step confirm). A rating already left is hidden and excluded from every average, admins get a notification linking to the booking, and the change is written to booking history and the audit log (`BOOKING_NO_SHOW_CORRECTED`, `RATING_EXCLUDED`). Sessions the instructor completed stay final.
 
 **Sweeper** (`src/jobs/bookingSweeper.js`, every 60 s) cancels as SYSTEM:
 - unpaid online packages past their due time ("Reservation fee was not paid in time"),
 - unpaid online bookings past their due time ("Online payment was not completed in time"),
 - PENDING cash bookings starting within `cashAutoCancelHours` ("Not confirmed N hours before the session").
 
-**Booking history.** Every action writes a `booking_history` row: action, from/to status, old/new time, reason, `changedById`, `changedByRole`. Cash and online payments add CASH_RECORDED / PAYMENT_RECEIVED rows. The API returns the latest action with the actor's name and role; the frontend shows it as e.g. **"Confirmed by Juan Dela Cruz (Instructor) · date"**, "System" for the sweeper, and "A removed user" if the user no longer exists. Booking detail pages show the full timeline.
+**Booking history.** Every action writes a `booking_history` row: action, from/to status, old/new time, reason, `changedById`, `changedByRole`. Cash and online payments add CASH_RECORDED / PAYMENT_RECEIVED rows. The API returns the latest action with the actor's name and role; the frontend shows it as e.g. **"Confirmed by Juan Dela Cruz (Instructor) · date"**, **"Completed automatically · Oct 7, 4:00 PM"** for auto-completion, "System" for the sweeper, and "A removed user" if the user no longer exists. Auto-completed bookings show an **Auto** tag on the Completed badge with the tooltip "Completed automatically [time] after the session ended". Booking detail pages show the full timeline.
 
 ---
 
@@ -406,7 +435,7 @@ stateDiagram-v2
 
 | Page | Content |
 |---|---|
-| Today | Awaiting confirmation, cash to collect today, sessions needing completion, average rating; today's sessions with quick actions; my cash today; next 7 days |
+| Today | Awaiting confirmation, cash to collect today, sessions needing completion, average rating; **Recently auto-completed** (last 24 h, with "Mark as no-show" and a countdown); **Cash not recorded** (completed cash sessions, with "Record cash"); today's sessions with quick actions; my cash today; next 7 days |
 | Schedule | Day / week view, colour-coded by status |
 | Bookings / Booking detail | Filter by date and status; confirm, reschedule, cancel, complete, no-show, record cash; client, pickup address, package balance, payments, history |
 | Clients / Client detail | Clients they have had bookings with; contact details, sessions, private notes (only the instructor sees them) |
@@ -451,9 +480,12 @@ Channels: **in-app** (stored in `notifications`) and **email** (console or SMTP,
 | Cash recorded | Instructor |
 | Online payment received | Client and instructor |
 | Rating received | Instructor |
+| Session auto-completed | Client ("How was your session? Rate your instructor.") and instructor |
+| Auto-completed cash session not paid | Instructor ("Cash not recorded for [client]'s session.") |
+| Auto-completed session corrected to no-show | All active admins |
 
-- Clients and instructors have a bell in the header (unread badge, latest 5, mark all read) that polls every 30 s, plus a full notifications page.
-- Admins receive no notifications.
+- Clients, instructors and admins have a bell in the header (unread badge, latest 5, mark all read) that polls every 30 s, plus a full notifications page.
+- When a poll brings a booking-related notification, open booking lists and detail pages refetch; a completed session also shows a toast ("Your session with [name] was marked completed.").
 
 ---
 
@@ -472,7 +504,7 @@ Channels: **in-app** (stored in `notifications`) and **email** (console or SMTP,
 | Viewer | Sees |
 |---|---|
 | Client | Their own stars on the booking; rating form states: not yet, open, rated, expired |
-| Instructor | Average, count, breakdown, list of stars + comments + session date. No client name. Hidden comments removed. |
+| Instructor | Average, count, breakdown, list of stars + comments + session date. No client name. Hidden comments removed. Ratings on sessions corrected to no-show are excluded from every average. |
 | Admin | All ratings with client and instructor names; can hide or unhide a comment (stars still count in averages) |
 | Public | Instructors with fewer than 3 ratings show as "New" |
 
@@ -490,16 +522,18 @@ Channels: **in-app** (stored in `notifications`) and **email** (console or SMTP,
 | Page | Path | Controls |
 |---|---|---|
 | Overview | `/admin` | Today's bookings, revenue this month (paid), pending requests, failed payments |
-| Bookings | `/admin/bookings` | Filter by date, client, status, instructor, branch, last action by; confirm, reschedule, cancel |
+| Bookings | `/admin/bookings` | Filter by date, client, status, instructor, branch, last action by, completed by (System / Instructor / Admin); confirm, reschedule, cancel |
 | Booking detail | `/admin/bookings/:id` | Client, instructor, payments, full history |
-| Payments | `/admin/payments` | Cash void requests (approve / reject); totals per status; filtered payment list |
+| Payments | `/admin/payments` | Cash void requests (approve / reject); totals per status; filtered payment list; **Completed – cash unpaid** tab with a count badge |
 | Packages & rates | `/admin/packages` | Price grid per service area × package, for Own Car and Car Rental; on-sale and serving-area toggles. (No create-package UI; the API has `POST /admin/packages`.) |
 | Ratings | `/admin/ratings` | All ratings, per-instructor averages, hide / unhide comments |
 | Instructors | `/admin/instructors` | Add, edit, reset password, deactivate (signs them out everywhere) |
 | Branches | `/admin/branches` | Add / edit name and coordinates (used for recommendations), activate / deactivate |
 | Admins | `/admin/admins` | Add admins, reset password, deactivate |
 | Audit log | `/admin/audit-log` | Filter by action; who, what, target, field changes |
-| Settings | `/admin/settings` | The five settings below, plus PayMongo status (mode, keys set, webhook URL) and a "Test connection" button |
+| Settings | `/admin/settings` | The booking and payment settings below, plus PayMongo status (mode, keys set, webhook URL) and a "Test connection" button |
+| Auto-complete | `/admin/settings/auto-complete` | Grace period; status (last run, next run, last result, error banner); paginated run history; **Run now** with confirm and a result toast |
+| Notifications | `/admin/notifications` | Admin notifications (e.g. a session corrected to no-show) |
 
 ---
 
@@ -515,6 +549,7 @@ Channels: **in-app** (stored in `notifications`) and **email** (console or SMTP,
 | Role checks | `requireAuth` reloads the user each request (inactive → 403, pending password change → 403). `requireRole` on the client, instructor, admin and registration routers. |
 | Data scoping | Ownership is part of each lookup (`findScoped` with `clientId` or `instructorId`), so another user's record returns 404. Actor fields (`recordedById`, `changedById`, `lastActionById`, `requestedById`, `reviewedById`, rating `clientId`) always come from the session. |
 | Validation | zod on body, query and params, mostly `.strict()` |
+| Cron endpoint | `POST /cron/auto-complete` needs `Authorization: Bearer $CRON_SECRET` (timing-safe compare, rate-limited); 401 otherwise or when no secret is set |
 | Webhook | HMAC-SHA256 over `t.rawBody` with `PAYMONGO_WEBHOOK_SECRET`, timing-safe compare, ±300 s tolerance, idempotent by `(provider, eventId)` |
 | Errors | Typed `AppError`s; stack traces never returned in production |
 | Addresses | Instructor home address is returned only to admins and the instructor themselves, never by list or public endpoints |
@@ -533,6 +568,7 @@ Channels: **in-app** (stored in `notifications`) and **email** (console or SMTP,
 | `cashAutoCancelHours` | 12 | 0–168 | PENDING cash bookings starting within this window are auto-cancelled |
 | `pricePerHour` | 800 | > 0, ≤ 100000 | Price of single (non-package) bookings |
 | `reservationFee` | 1000 | 0–100000 | Package reservation fee (capped at the package price) |
+| `autoCompleteGraceHours` | 2 | 0–72 | Hours after a session ends before it is auto-completed |
 
 **Fixed in code**
 
@@ -545,6 +581,8 @@ Channels: **in-app** (stored in `notifications`) and **email** (console or SMTP,
 | Top Rated list size / cache | 5 / 10 minutes |
 | Webhook timestamp tolerance | 300 seconds |
 | Sweeper interval | 60 seconds |
+| Auto-complete schedule / batch size | every 15 minutes (`APP_TIMEZONE`) / 200 |
+| No-show correction window | 24 hours after auto-completion |
 | Notification polling (frontend) | 30 seconds |
 
 Environment-level settings are listed under [Environment variables](#environment-variables).
@@ -580,6 +618,7 @@ Environment-level settings are listed under [Environment variables](#environment
 | `notifications` (Notification) | In-app notifications |
 | `app_settings` (AppSetting) | Admin-editable settings |
 | `audit_logs` (AuditLog) | Audit trail |
+| `cron_runs` (CronRun) | One row per auto-complete run: trigger, status, counts, error |
 | `services`, `service_requests`, `request_status_history`, `invoices`, `invoice_items` | Older service-request / invoice models. TODO: confirm — not used by current services |
 
 
@@ -603,6 +642,7 @@ All paths are prefixed with `/api/v1`. Responses use `{ "success": true, "data":
 | GET | `/instructors/:id/slots` | – | Open slots for `date`, `duration` |
 | GET | `/public/top-instructors` | – | Top 5 rated instructors |
 | POST | `/payments/webhooks/paymongo` | – (HMAC signature) | PayMongo webhook |
+| POST | `/cron/auto-complete` | – (Bearer `CRON_SECRET`) | Run auto-complete (external scheduler) |
 
 ### Auth
 
@@ -657,6 +697,7 @@ All paths are prefixed with `/api/v1`. Responses use `{ "success": true, "data":
 | PATCH | `/instructor/bookings/:id/complete` | INSTRUCTOR | Complete (after start) |
 | PATCH | `/instructor/bookings/:id/no-show` | INSTRUCTOR | No-show (after start) |
 | PATCH | `/instructor/bookings/:id/cancel` | INSTRUCTOR | Cancel |
+| PATCH | `/instructor/bookings/:id/correct-no-show` | INSTRUCTOR | Turn an auto-completed session into a no-show (24 h window, reason required) |
 | POST | `/instructor/bookings/:id/cash` | INSTRUCTOR | Record cash, issue OR number |
 | GET | `/instructor/schedule` | INSTRUCTOR | Bookings in a range (< 42 days) |
 | GET | `/instructor/clients` | INSTRUCTOR | Own clients |
@@ -683,7 +724,7 @@ All paths are prefixed with `/api/v1`. Responses use `{ "success": true, "data":
 | PATCH | `/admin/void-requests/:id` | ADMIN | Approve / reject void |
 | GET | `/admin/ratings` | ADMIN | All ratings |
 | PATCH | `/admin/ratings/:id/hide` | ADMIN | Hide / unhide comment |
-| GET | `/admin/bookings` | ADMIN | All bookings |
+| GET | `/admin/bookings` | ADMIN | All bookings (also `completedBy`, `cashUnpaid=true`) |
 | GET | `/admin/bookings/:id` | ADMIN | Booking detail |
 | GET | `/admin/bookings/:id/history` | ADMIN | Booking history |
 | POST | `/admin/bookings/:id/approve` | ADMIN | Confirm booking |
@@ -709,5 +750,11 @@ All paths are prefixed with `/api/v1`. Responses use `{ "success": true, "data":
 | POST | `/admin/payment-provider/test` | ADMIN | Test PayMongo connection |
 | GET / PATCH | `/admin/settings` | ADMIN | Settings |
 | GET | `/admin/audit-logs` | ADMIN | Audit log (`action`, `actorId`) |
+| GET | `/admin/auto-complete` | ADMIN | Auto-complete status (grace, last run, next run) |
+| GET | `/admin/auto-complete/runs` | ADMIN | Run history (paginated) |
+| POST | `/admin/auto-complete/run` | ADMIN | Run now |
+| GET | `/admin/notifications` | ADMIN | Notifications |
+| PATCH | `/admin/notifications/read-all` | ADMIN | Mark all read |
+| PATCH | `/admin/notifications/:id/read` | ADMIN | Mark one read |
 | GET | `/registrations` | ADMIN | Signup records |
 | GET | `/registrations/:id` | ADMIN | One signup record |

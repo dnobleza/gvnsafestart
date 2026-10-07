@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import Button from '../../components/Button';
 import PageHeader from '../../components/PageHeader';
 import StatCard from '../../components/StatCard';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import StatusBadge from '../../components/StatusBadge';
-import { formatDay, formatMoney, formatTime } from '../../utils/format';
+import useBookingRefresh from '../../hooks/useBookingRefresh';
+import { formatDateTime, formatDay, formatMoney, formatTime } from '../../utils/format';
 import BookingActions from './BookingActions';
+import NoShowCorrection from './NoShowCorrection';
 import { useDashboard } from './hooks/useInstructorResources';
 
 const QUICK = ['confirm', 'complete', 'noShow', 'cash'];
@@ -50,7 +53,7 @@ function SessionRow({ booking, onDone }) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge status={booking.status} />
+        <BookingStatusBadge booking={booking} />
         {booking.status !== 'PENDING' ? <StatusBadge status={booking.paymentStatus} /> : null}
         <BookingActions booking={booking} onDone={onDone} only={QUICK} />
       </div>
@@ -58,10 +61,43 @@ function SessionRow({ booking, onDone }) {
   );
 }
 
+function FollowUpRow({ booking, children }) {
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+      <div className="min-w-0">
+        <Link to={`/instructor/bookings/${booking.id}`} className="text-ink-100 hover:text-accent-300 text-sm font-medium">
+          {booking.client.fullName}
+        </Link>
+        <p className="text-ink-500 text-xs">
+          {formatDateTime(booking.scheduledAt)} · {booking.lessonType}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
+    </li>
+  );
+}
+
+function FollowUpPanel({ title, rows, loading, error, empty, render }) {
+  return (
+    <Panel title={title}>
+      {loading ? (
+        <Skeleton rows={2} />
+      ) : error ? (
+        <p className="text-danger-300 px-5 py-6 text-sm">Could not load this list.</p>
+      ) : !rows?.length ? (
+        <p className="text-ink-500 px-5 py-6 text-sm">{empty}</p>
+      ) : (
+        <ul className="divide-surface-800 divide-y">{rows.map(render)}</ul>
+      )}
+    </Panel>
+  );
+}
+
 export default function HomePage() {
   const { data, loading, error, refetch } = useDashboard();
   const counts = data?.counts;
   const statLoading = loading && !data;
+  useBookingRefresh(refetch);
 
   return (
     <>
@@ -86,6 +122,35 @@ export default function HomePage() {
           hint={data ? `${data.rating.count} rating${data.rating.count === 1 ? '' : 's'}` : null}
           loading={statLoading}
           error={error}
+        />
+      </div>
+
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        <FollowUpPanel
+          title="Recently auto-completed"
+          rows={data?.recentlyAutoCompleted}
+          loading={statLoading}
+          error={error}
+          empty="No sessions were completed automatically in the last 24 hours."
+          render={(b) => (
+            <FollowUpRow key={b.id} booking={b}>
+              <BookingStatusBadge booking={b} />
+              <NoShowCorrection booking={b} onDone={refetch} compact />
+            </FollowUpRow>
+          )}
+        />
+        <FollowUpPanel
+          title="Cash not recorded"
+          rows={data?.cashNotRecorded}
+          loading={statLoading}
+          error={error}
+          empty="All completed cash sessions are recorded."
+          render={(b) => (
+            <FollowUpRow key={b.id} booking={b}>
+              <StatusBadge status={b.paymentStatus} />
+              <BookingActions booking={b} onDone={refetch} only={['cash']} />
+            </FollowUpRow>
+          )}
         />
       </div>
 
@@ -148,7 +213,7 @@ export default function HomePage() {
                           {formatDay(b.scheduledAt)} · {formatTime(b.scheduledAt)}
                         </span>
                       </span>
-                      <StatusBadge status={b.status} />
+                      <BookingStatusBadge booking={b} />
                     </Link>
                   </li>
                 ))}

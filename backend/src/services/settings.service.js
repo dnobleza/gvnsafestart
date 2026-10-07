@@ -9,6 +9,7 @@ const DEFAULTS = Object.freeze({
   cashAutoCancelHours: 12,
   pricePerHour: 800,
   reservationFee: 1000,
+  autoCompleteGraceHours: 2,
 });
 
 const CACHE_MS = 30000;

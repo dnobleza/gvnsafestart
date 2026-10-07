@@ -14,6 +14,9 @@ const audit = require('../../controllers/admin/audit.controller');
 const ratings = require('../../controllers/admin/rating.controller');
 const settings = require('../../controllers/admin/settings.controller');
 const catalog = require('../../controllers/admin/catalog.controller');
+const autoComplete = require('../../controllers/admin/autoComplete.controller');
+const notifications = require('../../controllers/notification.controller');
+const notificationSchemas = require('../../validators/notification.validator');
 
 const router = Router();
 
@@ -67,5 +70,13 @@ router.get('/settings', validate(schemas.settingsGetSchema), asyncHandler(settin
 router.patch('/settings', validate(schemas.settingsUpdateSchema), asyncHandler(settings.update));
 
 router.get('/audit-logs', validate(schemas.auditListSchema), asyncHandler(audit.list));
+
+router.get('/auto-complete', validate(schemas.autoCompleteStatusSchema), asyncHandler(autoComplete.status));
+router.get('/auto-complete/runs', validate(schemas.autoCompleteRunsSchema), asyncHandler(autoComplete.runs));
+router.post('/auto-complete/run', validate(schemas.autoCompleteRunSchema), asyncHandler(autoComplete.run));
+
+router.get('/notifications', validate(notificationSchemas.listSchema), asyncHandler(notifications.list));
+router.patch('/notifications/read-all', validate(notificationSchemas.readAllSchema), asyncHandler(notifications.markAllRead));
+router.patch('/notifications/:id/read', validate(notificationSchemas.readSchema), asyncHandler(notifications.markRead));
 
 module.exports = router;

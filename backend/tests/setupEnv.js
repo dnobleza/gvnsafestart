@@ -37,3 +37,5 @@ process.env.API_PUBLIC_URL = 'https://api.example.test';
 process.env.GEOCODER_PROVIDER = 'nominatim';
 process.env.GEOCODER_BASE_URL = 'https://geo.example.test';
 process.env.GEOCODER_CONTACT_EMAIL = 'ops@example.test';
+process.env.ENABLE_CRON = 'false';
+process.env.CRON_SECRET = 'cron-test-secret-value';

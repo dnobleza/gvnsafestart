@@ -53,6 +53,12 @@ const envSchema = z.object({
   GEOCODER_CONTACT_EMAIL: optionalString,
 
   APP_TIMEZONE: z.string().default('Asia/Manila'),
+  // z.coerce.boolean() would read the string "false" as true.
+  ENABLE_CRON: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  CRON_SECRET: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().min(16).optional(),
+  ),
   SEED_ADMIN_EMAIL: optionalString,
   SEED_ADMIN_PASSWORD: optionalString,
 });
@@ -115,6 +121,7 @@ module.exports = Object.freeze({
     smtp: Object.freeze({ host: env.SMTP_HOST, port: env.SMTP_PORT, user: env.SMTP_USER, pass: env.SMTP_PASS }),
   }),
   timezone: env.APP_TIMEZONE,
+  cron: Object.freeze({ enabled: env.ENABLE_CRON, secret: env.CRON_SECRET }),
   appBaseUrl: env.APP_BASE_URL,
   apiPublicUrl: env.API_PUBLIC_URL.replace(/\/+$/, ''),
   geocoder: Object.freeze({

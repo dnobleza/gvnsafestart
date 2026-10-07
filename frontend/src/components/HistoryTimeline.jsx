@@ -1,6 +1,6 @@
 import Button from './Button';
 import StatusBadge from './StatusBadge';
-import { ACTION_LABEL, actorLabel, formatDateTime } from '../utils/format';
+import { actorLabel, formatDateTime, historyLabel } from '../utils/format';
 
 export default function HistoryTimeline({ entries, loading, error, onRetry }) {
   if (loading && !entries) {
@@ -32,7 +32,7 @@ export default function HistoryTimeline({ entries, loading, error, onRetry }) {
         <li key={h.id} className="relative pb-5 pl-6 last:pb-0">
           <span className="bg-accent-500 absolute top-1.5 -left-[5px] h-2.5 w-2.5 rounded-full" aria-hidden="true" />
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-ink-100 text-sm font-medium">{ACTION_LABEL[h.action] || h.action}</p>
+            <p className="text-ink-100 text-sm font-medium">{historyLabel(h)}</p>
             {h.toStatus && h.fromStatus !== h.toStatus ? <StatusBadge status={h.toStatus} /> : null}
           </div>
           <p className="text-ink-400 text-xs">

@@ -4,8 +4,10 @@ import Button from '../../components/Button';
 import DataTable from '../../components/DataTable';
 import PageHeader from '../../components/PageHeader';
 import Pagination from '../../components/Pagination';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDateTime } from '../../utils/format';
+import useBookingRefresh from '../../hooks/useBookingRefresh';
 import { useMyBookings } from './hooks/useClientResources';
 
 const TABS = [
@@ -46,7 +48,7 @@ const columns = [
     header: 'Status',
     render: (b) => (
       <div className="flex flex-wrap gap-1.5">
-        <StatusBadge status={b.status} />
+        <BookingStatusBadge booking={b} />
         {b.status !== 'CANCELLED' ? <StatusBadge status={b.paymentStatus} /> : null}
       </div>
     ),
@@ -68,6 +70,7 @@ export default function MyBookingsPage() {
   const tab = TABS.some(([key]) => key === params.get('tab')) ? params.get('tab') : 'upcoming';
   const page = Math.max(1, Number(params.get('page')) || 1);
   const { data, meta, loading, error, refetch } = useMyBookings(tab, page);
+  useBookingRefresh(refetch);
 
   return (
     <>

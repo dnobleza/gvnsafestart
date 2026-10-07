@@ -3,6 +3,7 @@ const prisma = require('../src/config/prisma');
 const tokenService = require('../src/services/token.service');
 
 const TABLES = [
+  'cron_runs',
   'audit_logs',
   'receipt_counters',
   'client_packages',

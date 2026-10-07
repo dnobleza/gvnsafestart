@@ -39,6 +39,16 @@
   --color-danger-300: #f4a3a3;
   --color-danger-500: #c24141;
 
+  /* Booking status badges only (pending, confirmed, completed). Never used for
+     buttons, links or highlights, so gold stays the single accent. The 300
+     shades are text on a 10% tint of the 500, all above 8:1 on surface 950. */
+  --color-status-pending-300: #fde68a;
+  --color-status-pending-500: #eab308;
+  --color-status-confirmed-300: #93c5fd;
+  --color-status-confirmed-500: #3b82f6;
+  --color-status-completed-300: #86efac;
+  --color-status-completed-500: #22c55e;
+
   --radius-surface: 0.75rem;
 }
 

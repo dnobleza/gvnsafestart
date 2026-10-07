@@ -42,6 +42,11 @@ const cancel = async (req, res) => {
   res.json({ success: true, data: { booking } });
 };
 
+const correctNoShow = async (req, res) => {
+  const booking = await portal.correctNoShow(req.user, req.params.id, req.body, meta(req));
+  res.json({ success: true, data: { booking } });
+};
+
 const recordCash = async (req, res) => {
   const booking = await cashService.record(req.user, req.params.id, req.body, meta(req));
   res.status(201).json({ success: true, data: { booking } });
@@ -51,4 +56,4 @@ const schedule = async (req, res) => {
   res.json({ success: true, data: { bookings: await portal.schedule(req.user, req.query) } });
 };
 
-module.exports = { dashboard, list, get, history, confirm, reschedule, complete, noShow, cancel, recordCash, schedule };
+module.exports = { dashboard, list, get, history, confirm, reschedule, complete, noShow, cancel, correctNoShow, recordCash, schedule };

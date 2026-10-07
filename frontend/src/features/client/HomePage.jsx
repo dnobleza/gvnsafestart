@@ -3,10 +3,14 @@ import { Link } from 'react-router-dom';
 import Button from '../../components/Button';
 import PageHeader from '../../components/PageHeader';
 import StatCard from '../../components/StatCard';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDateTime, formatDay, formatMoney, formatTime } from '../../utils/format';
+import useBookingRefresh from '../../hooks/useBookingRefresh';
+import { showToast } from '../../utils/toast';
 import { useDashboard } from './hooks/useClientResources';
 import PayNowButton from './PayNowButton';
+import RateInstructorForm from './RateInstructorForm';
 
 function NextSession({ booking }) {
   if (!booking) {
@@ -29,7 +33,7 @@ function NextSession({ booking }) {
         {booking.instructor?.branch ? ` · ${booking.instructor.branch.name}` : ''}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <StatusBadge status={booking.status} />
+        <BookingStatusBadge booking={booking} />
         <StatusBadge status={booking.paymentStatus} />
         {unpaidOnline ? <PayNowButton bookingId={booking.id} /> : null}
         <Button variant="ghost" size="sm" to={`/client/bookings/${booking.id}`}>
@@ -59,7 +63,7 @@ function List({ title, rows, empty, action }) {
                   {b.lessonType} · {b.instructor?.fullName}
                 </span>
               </Link>
-              {action ? action(b) : <StatusBadge status={b.status} />}
+              {action ? action(b) : <BookingStatusBadge booking={b} />}
             </li>
           ))}
         </ul>
@@ -95,9 +99,26 @@ function Packages({ packages }) {
   );
 }
 
+function RateCards({ bookings, onRated }) {
+  if (!bookings.length) return null;
+  return (
+    <section aria-label="Rate your sessions" className="mb-6 grid gap-4 lg:grid-cols-2">
+      {bookings.map((b) => (
+        <RateInstructorForm key={b.id} booking={b} heading="Rate your session" onRated={onRated} />
+      ))}
+    </section>
+  );
+}
+
 export default function HomePage() {
   const { data, loading, error, refetch } = useDashboard();
   const statLoading = loading && !data;
+  useBookingRefresh(refetch);
+
+  const onRated = () => {
+    showToast('Thanks for rating your instructor.', { tone: 'success' });
+    refetch();
+  };
 
   return (
     <>
@@ -117,6 +138,7 @@ export default function HomePage() {
           </Button>
         </div>
       ) : null}
+      {data ? <RateCards bookings={data.toRate} onRated={onRated} /> : null}
       {statLoading ? (
         <div className="bg-surface-900 mb-6 h-36 animate-pulse rounded-xl" aria-busy="true" />
       ) : data ? (
@@ -131,23 +153,13 @@ export default function HomePage() {
       </div>
       {data ? <Packages packages={data.packages || []} /> : null}
       {data ? (
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-2">
           <List title="Upcoming" rows={data.upcoming} empty="Nothing booked yet." />
           <List
             title="Unpaid"
             rows={data.unpaid}
             empty="Everything is paid."
             action={(b) => (b.paymentMethod === 'ONLINE' ? <PayNowButton bookingId={b.id} /> : <StatusBadge status={b.paymentStatus} />)}
-          />
-          <List
-            title="Rate your instructor"
-            rows={data.toRate}
-            empty="No sessions waiting for a rating."
-            action={(b) => (
-              <Button size="sm" variant="secondary" to={`/client/bookings/${b.id}`}>
-                Rate
-              </Button>
-            )}
           />
         </div>
       ) : null}

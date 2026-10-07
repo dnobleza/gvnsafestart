@@ -5,9 +5,9 @@ import { rateBooking } from '../../api/clientPortal';
 import FormAlert from '../../components/FormAlert';
 import SubmitButton from '../../components/SubmitButton';
 import useAction from '../../hooks/useAction';
-import { formatDate } from '../../utils/format';
+import { formatDate, formatDateTime } from '../../utils/format';
 
-export default function RateInstructorForm({ booking, onRated }) {
+export default function RateInstructorForm({ booking, onRated, heading = 'Rate your instructor' }) {
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState('');
   const [fieldError, setFieldError] = useState(null);
@@ -23,9 +23,9 @@ export default function RateInstructorForm({ booking, onRated }) {
 
   return (
     <form onSubmit={onSubmit} noValidate className="border-accent-600 bg-surface-900 rounded-xl border p-5">
-      <h2 className="text-sm font-semibold tracking-tight">Rate your instructor</h2>
+      <h2 className="text-sm font-semibold tracking-tight">{heading}</h2>
       <p className="text-ink-500 mb-4 text-xs">
-        How was {booking.instructor?.fullName}? You can rate until {formatDate(booking.rateUntil)}. Your name is not shown to
+        {booking.lessonType} on {formatDateTime(booking.scheduledAt)}. How was {booking.instructor?.fullName}? You can rate until {formatDate(booking.rateUntil)}. Your name is not shown to
         the instructor.
       </p>
       <FormAlert>{error?.message}</FormAlert>
@@ -54,11 +54,11 @@ export default function RateInstructorForm({ booking, onRated }) {
         </div>
         {fieldError ? <p className="text-danger-300 mt-2 text-sm">{fieldError}</p> : null}
       </fieldset>
-      <label htmlFor="rating-comment" className="text-ink-100 mt-4 block text-sm font-medium">
+      <label htmlFor={`rating-comment-${booking.id}`} className="text-ink-100 mt-4 block text-sm font-medium">
         Comment (optional)
       </label>
       <textarea
-        id="rating-comment"
+        id={`rating-comment-${booking.id}`}
         rows={3}
         maxLength={500}
         value={comment}

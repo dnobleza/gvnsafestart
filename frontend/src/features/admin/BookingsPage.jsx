@@ -7,13 +7,14 @@ import FilterBar from '../../components/FilterBar';
 import PageHeader from '../../components/PageHeader';
 import Pagination from '../../components/Pagination';
 import SelectField from '../../components/SelectField';
-import StatusBadge from '../../components/StatusBadge';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
+import useBookingRefresh from '../../hooks/useBookingRefresh';
 import useListParams from '../../hooks/useListParams';
 import { describeAction, formatDateTime } from '../../utils/format';
 import BookingActionDialog from './BookingActionDialog';
 import { useBookings, useBranchOptions, useInstructorOptions } from './hooks/useAdminResources';
 
-const FILTER_KEYS = ['from', 'to', 'client', 'status', 'instructorId', 'branchId', 'actionBy'];
+const FILTER_KEYS = ['from', 'to', 'client', 'status', 'instructorId', 'branchId', 'actionBy', 'completedBy'];
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
   { value: 'PENDING', label: 'Pending' },
@@ -29,6 +30,13 @@ const ACTION_BY_OPTIONS = [
   { value: 'CLIENT', label: 'Client' },
 ];
 
+const COMPLETED_BY_OPTIONS = [
+  { value: '', label: 'Anyone' },
+  { value: 'SYSTEM', label: 'System' },
+  { value: 'INSTRUCTOR', label: 'Instructor' },
+  { value: 'ADMIN', label: 'Admin' },
+];
+
 // Mirrors the API's transition rules so only possible actions are offered; the
 // API still rejects anything else with INVALID_BOOKING_TRANSITION.
 const ACTIONS = {
@@ -41,6 +49,7 @@ const ACTION_LABEL = { approve: 'Confirm', reschedule: 'Reschedule', cancel: 'Ca
 export default function BookingsPage() {
   const { filters, page, setFilter, setPage, resetFilters } = useListParams(FILTER_KEYS);
   const { data, meta, loading, error, refetch } = useBookings(filters, page);
+  useBookingRefresh(refetch);
   const instructors = useInstructorOptions();
   const branches = useBranchOptions();
   const [action, setAction] = useState(null);
@@ -84,7 +93,7 @@ export default function BookingsPage() {
       header: 'Status',
       render: (b) => (
         <div>
-          <StatusBadge status={b.status} />
+          <BookingStatusBadge booking={b} />
           {b.lastAction ? <p className="text-ink-500 mt-1 max-w-[18rem] text-xs">{describeAction(b.lastAction)}</p> : null}
         </div>
       ),
@@ -115,7 +124,7 @@ export default function BookingsPage() {
     <>
       <PageHeader title="Bookings" description="Every booking, who touched it last, and when." />
       <FilterBar filters={filters} setFilter={setFilter} onReset={resetFilters} statusOptions={STATUS_OPTIONS} />
-      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SelectField
           label="Instructor"
           value={filters.instructorId}
@@ -139,6 +148,12 @@ export default function BookingsPage() {
           value={filters.actionBy}
           onChange={(e) => setFilter('actionBy', e.target.value)}
           options={ACTION_BY_OPTIONS}
+        />
+        <SelectField
+          label="Completed by"
+          value={filters.completedBy}
+          onChange={(e) => setFilter('completedBy', e.target.value)}
+          options={COMPLETED_BY_OPTIONS}
         />
       </div>
       <DataTable

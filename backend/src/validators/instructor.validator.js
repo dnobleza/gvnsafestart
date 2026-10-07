@@ -45,6 +45,8 @@ const rescheduleSchema = {
 
 const cancelSchema = { ...idParams, body: z.object({ reason }).strict() };
 
+const correctNoShowSchema = { ...idParams, body: z.object({ reason }).strict() };
+
 const cashSchema = {
   ...idParams,
   body: z
@@ -127,6 +129,7 @@ module.exports = {
   bookingActionSchema,
   rescheduleSchema,
   cancelSchema,
+  correctNoShowSchema,
   cashSchema,
   scheduleSchema,
   slotsSchema,

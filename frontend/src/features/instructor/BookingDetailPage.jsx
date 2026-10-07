@@ -1,11 +1,15 @@
+import { useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Button from '../../components/Button';
 import HistoryTimeline from '../../components/HistoryTimeline';
 import PageHeader from '../../components/PageHeader';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDateTime, formatMoney } from '../../utils/format';
+import useBookingRefresh from '../../hooks/useBookingRefresh';
 import BookingActions from './BookingActions';
+import NoShowCorrection from './NoShowCorrection';
 import { useBookingHistory, useMyBooking } from './hooks/useInstructorResources';
 
 function Row({ label, children }) {
@@ -23,10 +27,13 @@ export default function BookingDetailPage() {
   const history = useBookingHistory(id);
   const b = booking.data;
 
-  const refresh = () => {
-    booking.refetch();
-    history.refetch();
-  };
+  const { refetch: refetchBooking } = booking;
+  const { refetch: refetchHistory } = history;
+  const refresh = useCallback(() => {
+    refetchBooking();
+    refetchHistory();
+  }, [refetchBooking, refetchHistory]);
+  useBookingRefresh(refresh);
 
   return (
     <>
@@ -57,11 +64,19 @@ export default function BookingDetailPage() {
           <section className="border-surface-700 bg-surface-900 rounded-xl border p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex gap-2">
-                <StatusBadge status={b.status} />
+                <BookingStatusBadge booking={b} />
                 <StatusBadge status={b.paymentStatus} />
               </div>
               <BookingActions booking={b} onDone={refresh} />
             </div>
+            {b.autoCompleted && b.status === 'COMPLETED' ? (
+              <div className="border-surface-800 mb-4 flex flex-col gap-2 border-b pb-4">
+                <p className="text-ink-400 text-sm">
+                  Auto-completed {formatDateTime(b.autoCompletedAt)} after the session ended.
+                </p>
+                <NoShowCorrection booking={b} onDone={refresh} />
+              </div>
+            ) : null}
             <dl>
               <Row label="Client">
                 {b.client.fullName}

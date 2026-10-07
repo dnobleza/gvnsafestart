@@ -3,12 +3,17 @@ const config = require('./src/config');
 const logger = require('./src/config/logger');
 const prisma = require('./src/config/prisma');
 const bookingSweeper = require('./src/jobs/bookingSweeper');
+const autoCompleteJob = require('./src/jobs/autoCompleteJob');
 
 const server = app.listen(config.port, () => {
   logger.info(`API listening on http://localhost:${config.port}/api/v1 (${config.env})`);
 });
 
 bookingSweeper.start();
+if (config.cron.enabled) {
+  autoCompleteJob.start();
+  logger.info('Auto-complete scheduled every 15 minutes');
+}
 
 async function shutdown(signal) {
   logger.info(`${signal} received, shutting down`);

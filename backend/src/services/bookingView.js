@@ -1,3 +1,6 @@
+// How long an instructor may turn a system-completed session into a no-show.
+const CORRECTION_WINDOW_MS = 24 * 3600000;
+
 const toMoney = (value) => (value === null || value === undefined ? null : Number(value).toFixed(2));
 
 const branchOf = (user) => {
@@ -42,6 +45,14 @@ const packageSummary = (booking) => {
   };
 };
 
+const correctableUntil = (booking) =>
+  booking.status === 'COMPLETED' && booking.autoCompleted && booking.autoCompletedAt
+    ? new Date(booking.autoCompletedAt.getTime() + CORRECTION_WINDOW_MS)
+    : null;
+
+const isCashUnpaid = (booking) =>
+  booking.status === 'COMPLETED' && booking.paymentMethod === 'CASH' && booking.paymentStatus !== 'PAID';
+
 const base = (booking) => ({
   id: booking.id,
   lessonType: booking.lessonType,
@@ -73,6 +84,9 @@ const base = (booking) => ({
   lastAction: lastAction(booking),
   rated: Boolean(booking.rating),
   package: packageSummary(booking),
+  autoCompleted: Boolean(booking.autoCompleted),
+  autoCompletedAt: booking.autoCompletedAt || null,
+  cashUnpaid: isCashUnpaid(booking),
 });
 
 const forAdmin = (booking) => ({
@@ -85,10 +99,15 @@ const forAdmin = (booking) => ({
   },
 });
 
-const forInstructor = (booking) => ({
-  ...base(booking),
-  client: { id: booking.client.id, fullName: booking.client.fullName, phone: booking.client.phone },
-});
+const forInstructor = (booking) => {
+  const until = correctableUntil(booking);
+  return {
+    ...base(booking),
+    client: { id: booking.client.id, fullName: booking.client.fullName, phone: booking.client.phone },
+    correctableUntil: until,
+    canCorrectNoShow: Boolean(until && until.getTime() > Date.now()),
+  };
+};
 
 const forClient = (booking) => ({
   ...base(booking),
@@ -108,4 +127,14 @@ const historyEntry = (row) => ({
   createdAt: row.createdAt,
 });
 
-module.exports = { toMoney, branchOf, forAdmin, forInstructor, forClient, historyEntry };
+module.exports = {
+  CORRECTION_WINDOW_MS,
+  correctableUntil,
+  isCashUnpaid,
+  toMoney,
+  branchOf,
+  forAdmin,
+  forInstructor,
+  forClient,
+  historyEntry,
+};

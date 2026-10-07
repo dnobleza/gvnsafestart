@@ -76,3 +76,15 @@ export const updateServiceArea = (id, body) => patch(`/admin/service-areas/${id}
 export const getPaymentProvider = () => get('/admin/payment-provider');
 
 export const testPaymentProvider = () => post('/admin/payment-provider/test');
+
+export const getAutoCompleteStatus = () => get('/admin/auto-complete');
+
+export const listAutoCompleteRuns = list('/admin/auto-complete/runs');
+
+export const runAutoCompleteNow = () => post('/admin/auto-complete/run');
+
+export const listNotifications = list('/admin/notifications');
+
+export const markNotificationRead = (id) => patch(`/admin/notifications/${id}/read`);
+
+export const markAllNotificationsRead = () => patch('/admin/notifications/read-all');

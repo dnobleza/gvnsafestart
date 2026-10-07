@@ -9,7 +9,7 @@ const findByBooking = (bookingId, client = prisma) => client.rating.findUnique({
 const starCounts = (instructorIds) =>
   prisma.rating.groupBy({
     by: ['instructorId', 'stars'],
-    where: { instructorId: { in: instructorIds } },
+    where: { instructorId: { in: instructorIds }, excludedAt: null },
     _count: { _all: true },
   });
 
@@ -70,7 +70,7 @@ const instructorIdsWithRatings = async (filters) =>
 const topRated = async ({ minCount }) => {
   const groups = await prisma.rating.groupBy({
     by: ['instructorId'],
-    where: { instructor: { isActive: true, role: 'INSTRUCTOR' } },
+    where: { instructor: { isActive: true, role: 'INSTRUCTOR' }, excludedAt: null },
     _avg: { stars: true },
     _count: { _all: true },
     having: { instructorId: { _count: { gte: minCount } } },
@@ -91,6 +91,10 @@ const latestVisibleComments = (instructorIds) =>
 const setHidden = (id, isHidden, client = prisma) =>
   client.rating.update({ where: { id }, data: { isHidden } });
 
+// Hidden and out of every average, for a session that turned out not to happen.
+const exclude = (id, client = prisma) =>
+  client.rating.update({ where: { id }, data: { isHidden: true, excludedAt: new Date() } });
+
 module.exports = {
   create,
   findById,
@@ -102,4 +106,5 @@ module.exports = {
   listForAdmin,
   instructorIdsWithRatings,
   setHidden,
+  exclude,
 };

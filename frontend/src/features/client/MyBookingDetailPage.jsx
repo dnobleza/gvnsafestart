@@ -7,8 +7,10 @@ import HistoryTimeline from '../../components/HistoryTimeline';
 import PageHeader from '../../components/PageHeader';
 import ReasonDialog from '../../components/ReasonDialog';
 import Stars from '../../components/Stars';
+import BookingStatusBadge from '../../components/BookingStatusBadge';
 import StatusBadge from '../../components/StatusBadge';
-import { formatDateTime, formatMoney, formatTime } from '../../utils/format';
+import useBookingRefresh from '../../hooks/useBookingRefresh';
+import { NOT_CONFIRMED_REASON, formatDateTime, formatMoney, formatTime } from '../../utils/format';
 import ClientRescheduleDialog from './ClientRescheduleDialog';
 import { useMyBooking } from './hooks/useClientResources';
 import usePaymentConfirmation from './hooks/usePaymentConfirmation';
@@ -66,6 +68,8 @@ export default function MyBookingDetailPage() {
   const [thanks, setThanks] = useState(false);
   const returned = params.get('payment') === 'return';
   const paymentState = usePaymentConfirmation({ active: returned && Boolean(b), paid: b?.paymentStatus === 'PAID', refetch });
+  useBookingRefresh(refetch);
+  const notConfirmed = b?.status === 'CANCELLED' && b.cancelReason === NOT_CONFIRMED_REASON;
 
   const done = () => {
     setDialog(null);
@@ -110,9 +114,19 @@ export default function MyBookingDetailPage() {
           <div className="flex flex-col gap-6">
             <section className="border-surface-700 bg-surface-900 rounded-xl border p-5">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={b.status} />
+                <BookingStatusBadge booking={b} />
                 <StatusBadge status={b.paymentStatus} />
               </div>
+              {notConfirmed ? (
+                <div className="border-danger-500/40 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3">
+                  <p className="text-danger-300 text-sm">Cancelled: not confirmed before session start</p>
+                  {b.instructor ? (
+                    <Button size="sm" to={`/client/book?instructor=${b.instructor.id}`}>
+                      Book again
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
               <p className="text-ink-100 mt-4 text-lg font-semibold">{formatDateTime(b.scheduledAt)}</p>
               <dl className="mt-2">
                 <Row label="Lesson">
@@ -153,7 +167,7 @@ export default function MyBookingDetailPage() {
                   ) : null}
                 </Row>
                 {b.receiptNumber ? <Row label="Receipt no.">{b.receiptNumber}</Row> : null}
-                {b.statusNote?.reason ? (
+                {b.statusNote?.reason && !notConfirmed ? (
                   <Row label={b.statusNote.action === 'RESCHEDULED' ? 'Reschedule reason' : 'Cancel reason'}>
                     {b.statusNote.reason}
                   </Row>

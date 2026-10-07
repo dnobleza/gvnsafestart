@@ -54,6 +54,9 @@ const lockActiveAdmins = (client) =>
 // both pass the overlap check and then both insert.
 const lockUser = (client, id) => client.$queryRaw`SELECT id FROM users WHERE id = ${id}::uuid FOR UPDATE`;
 
+const findActiveByRole = (role, client = prisma) =>
+  client.user.findMany({ where: { role, isActive: true }, select: { id: true, fullName: true, email: true } });
+
 const findManyByIds = (ids, client = prisma) =>
   client.user.findMany({
     where: { id: { in: ids } },
@@ -62,6 +65,7 @@ const findManyByIds = (ids, client = prisma) =>
 
 module.exports = {
   lockUser,
+  findActiveByRole,
   findManyByIds,
   create,
   findById,

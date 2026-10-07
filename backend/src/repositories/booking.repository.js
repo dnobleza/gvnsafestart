@@ -52,7 +52,16 @@ const BOOKING_INCLUDE = {
 
 const OPEN_STATUSES = ['PENDING', 'CONFIRMED'];
 
-const buildWhere = ({ status, range, client, instructorId, clientId, branchId, actionBy } = {}) => {
+// Completed sessions split by who completed them: the system flags its own.
+const COMPLETED_BY = {
+  SYSTEM: { status: 'COMPLETED', autoCompleted: true },
+  INSTRUCTOR: { status: 'COMPLETED', autoCompleted: false, history: { some: { action: 'COMPLETED', changedByRole: 'INSTRUCTOR' } } },
+  ADMIN: { status: 'COMPLETED', autoCompleted: false, history: { some: { action: 'COMPLETED', changedByRole: 'ADMIN' } } },
+};
+
+const CASH_UNPAID = { status: 'COMPLETED', paymentMethod: 'CASH', paymentStatus: { not: 'PAID' } };
+
+const buildWhere = ({ status, range, client, instructorId, clientId, branchId, actionBy, completedBy, cashUnpaid } = {}) => {
   const where = {};
   if (status) where.status = status;
   if (range && (range.gte || range.lt)) where.scheduledAt = range;
@@ -61,6 +70,10 @@ const buildWhere = ({ status, range, client, instructorId, clientId, branchId, a
   if (clientId) where.clientId = clientId;
   if (branchId) where.instructor = { instructorProfile: { branchId } };
   if (actionBy) where.lastActionBy = { role: actionBy };
+  const and = [];
+  if (completedBy) and.push(COMPLETED_BY[completedBy]);
+  if (cashUnpaid) and.push(CASH_UNPAID);
+  if (and.length) where.AND = and;
   return where;
 };
 
@@ -124,6 +137,27 @@ const updateIfStatus = async (id, allowedStatuses, data, client = prisma) => {
   return count;
 };
 
+// Confirmed sessions whose end is before `cutoff` (now minus the grace
+// period). SKIP LOCKED lets a dashboard run and the scheduled run work side by
+// side without waiting on, or double-processing, the same rows.
+const lockDueForCompletion = (client, { cutoff, userId, limit }) => client.$queryRaw`
+    SELECT id FROM bookings
+    WHERE status = 'CONFIRMED'::"BookingStatus"
+      AND scheduled_at + (duration_minutes * interval '1 minute') < ${cutoff}
+      AND (${userId}::uuid IS NULL OR client_id = ${userId}::uuid OR instructor_id = ${userId}::uuid)
+    ORDER BY scheduled_at, id
+    LIMIT ${limit}
+    FOR UPDATE SKIP LOCKED`;
+
+const lockPendingPastStart = (client, { now, userId, limit }) => client.$queryRaw`
+    SELECT id FROM bookings
+    WHERE status = 'PENDING'::"BookingStatus"
+      AND scheduled_at < ${now}
+      AND (${userId}::uuid IS NULL OR client_id = ${userId}::uuid OR instructor_id = ${userId}::uuid)
+    ORDER BY scheduled_at, id
+    LIMIT ${limit}
+    FOR UPDATE SKIP LOCKED`;
+
 const findOverlap = async (client, { instructorId, start, end, excludeId }) => {
   const rows = await client.$queryRaw`
     SELECT id FROM bookings
@@ -183,6 +217,8 @@ module.exports = {
   updateByPackage,
   updateIfStatus,
   findOverlap,
+  lockDueForCompletion,
+  lockPendingPastStart,
   listBusy,
   countScheduledBetween,
   countByStatus,
