@@ -505,6 +505,7 @@ describe('my bookings', () => {
 describe('client profile', () => {
   it('saves name, phone and saved location, and shows a taken phone under the field', async () => {
     allowGeolocation();
+    geoApi.reverseGeocode.mockResolvedValue(null);
     clientApi.updateProfile
       .mockRejectedValueOnce(
         Object.assign(new Error('x'), {

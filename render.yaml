@@ -1,0 +1,79 @@
+# Render Blueprint: New > Blueprint in the Render dashboard, pick this repo.
+# autoDeploy is off; GitHub Actions triggers each deploy through a deploy hook
+# after CI passes (.github/workflows/ci-cd.yml).
+databases:
+  - name: gvnsafestart-db
+    plan: free
+    region: singapore
+    databaseName: safestart
+    user: safestart
+
+services:
+  - type: web
+    name: gvnsafestart-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    autoDeploy: false
+    # prisma is a devDependency, so include dev packages for the build.
+    buildCommand: npm ci --include=dev && npx prisma generate
+    # Free instances have no pre-deploy step, so migrations run at start.
+    startCommand: npx prisma migrate deploy && npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gvnsafestart-db
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: ENABLE_CRON
+        value: "true"
+      - key: APP_TIMEZONE
+        value: Asia/Manila
+      - key: LOG_LEVEL
+        value: info
+      # Set in the dashboard: the static site's https URL.
+      - key: CORS_ORIGIN
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      # Set in the dashboard: this service's own https URL (PayMongo webhooks).
+      - key: API_PUBLIC_URL
+        sync: false
+      # The fake provider is refused in production, so PayMongo keys are required.
+      - key: PAYMENT_PROVIDER
+        value: paymongo
+      - key: PAYMONGO_SECRET_KEY
+        sync: false
+      - key: PAYMONGO_WEBHOOK_SECRET
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: console
+      - key: GEOCODER_CONTACT_EMAIL
+        sync: false
+
+  - type: web
+    name: gvnsafestart-web
+    runtime: static
+    rootDir: frontend
+    autoDeploy: false
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Set in the dashboard: https://<api service>.onrender.com/api/v1
+      - key: VITE_API_BASE_URL
+        sync: false

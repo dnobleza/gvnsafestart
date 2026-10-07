@@ -220,6 +220,24 @@ cd backend && npm run lint && npm test
 cd frontend && npm run lint && npm test
 ```
 
+### CI/CD
+
+`.github/workflows/ci-cd.yml` runs on every push, pull request and manual dispatch:
+
+| Job | Steps |
+|---|---|
+| Backend | `npm ci` → `prisma generate` → `prisma migrate deploy` on a Postgres 16 service → lint → Jest |
+| Frontend | `npm ci` → lint → Vitest → `vite build` (uploads `dist` as an artifact) |
+| Deploy to Render | Only on `main` after both pass: POSTs the Render deploy hooks. Skips with a notice until the secrets exist. |
+
+Render setup (`render.yaml` Blueprint, Singapore region, `autoDeploy: false` so only CI deploys):
+
+1. Render dashboard → **New → Blueprint** → this repo. Fill the `sync: false` values when prompted (`CORS_ORIGIN`, `APP_BASE_URL`, `API_PUBLIC_URL`, `VITE_API_BASE_URL`, PayMongo keys, `GEOCODER_CONTACT_EMAIL`).
+2. Copy each service's **Deploy Hook** URL (Settings → Deploy Hook).
+3. GitHub → Settings → Secrets and variables → Actions: add `RENDER_DEPLOY_HOOK_API` and `RENDER_DEPLOY_HOOK_WEB`.
+
+TODO: confirm hosting details. The free Render Postgres expires after 30 days. The API and static site sit on different `onrender.com` subdomains, which browsers treat as different sites, so the `sameSite=lax` refresh cookie will not be sent across them; use a custom domain for both (e.g. `app.` and `api.` of one domain) before relying on login persistence.
+
 ---
 
 ## Roles
