@@ -13,7 +13,7 @@ function testDatabaseUrl() {
 
 const databaseUrl = testDatabaseUrl();
 if (!databaseUrl) {
-  throw new Error('TEST_DATABASE_URL is not set (see backend/.env.example)');
+  throw new Error('TEST_DATABASE_URL is not set (see Environment variables in README.md)');
 }
 
 process.env.NODE_ENV = 'test';

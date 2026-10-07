@@ -76,7 +76,7 @@ if (!parsed.success) {
   const details = parsed.error.issues
     .map((issue) => `  ${issue.path.join('.')}: ${issue.message}`)
     .join('\n');
-  throw new Error(`Invalid environment configuration:\n${details}\n\nSee backend/.env.example`);
+  throw new Error(`Invalid environment configuration:\n${details}\n\nSee Environment variables in README.md`);
 }
 
 const env = parsed.data;

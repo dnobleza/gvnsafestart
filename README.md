@@ -128,7 +128,7 @@ cd ../frontend && npm install
 
 ### Environment variables
 
-Copy `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env`, then fill in values. Never commit `.env`.
+Create `backend/.env` and `frontend/.env` with the variables below (`.env*` files are git-ignored, including examples). Never commit them. The API validates its env on startup and lists anything missing or invalid.
 
 **Backend**
 
@@ -336,6 +336,7 @@ sequenceDiagram
 
 - **Only the verified webhook marks an online payment PAID.** The return URL never changes payment state; the page only polls.
 - Event types other than `checkout_session.payment.paid` are recorded and ignored.
+- The webhook takes the same per-instructor lock as cash recording. If the booking (or package balance) was already settled, for example by cash, the online payment is still recorded as PAID but is not applied a second time; the booking history notes "refund needed", the audit entry has `refundNeeded: true`, and the client is told the extra payment will be refunded. Refunds themselves are manual.
 - An open, unexpired checkout is reused instead of creating a new one.
 - Unpaid online bookings and packages are auto-cancelled after `onlinePaymentExpiryMinutes` (see [Settings](#settings)).
 - With `PAYMENT_PROVIDER=fake`, checkout sends the client straight back; use `npm run payments:simulate` to send the webhook.
