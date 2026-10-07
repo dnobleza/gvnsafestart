@@ -6,6 +6,7 @@ const bookingRepository = require('../repositories/booking.repository');
 const paymentRepository = require('../repositories/payment.repository');
 const paymentEventRepository = require('../repositories/paymentEvent.repository');
 const clientPackageRepository = require('../repositories/clientPackage.repository');
+const userRepository = require('../repositories/user.repository');
 const packagePayment = require('./packagePayment');
 const auditService = require('./audit.service');
 const bookingAction = require('./bookingAction.service');
@@ -156,6 +157,12 @@ const startPackageCheckout = async (actor, packageId, meta) => {
   return { checkoutUrl: checkout.checkoutUrl, expiresAt, amount };
 };
 
+const refundReason = ({ alreadyPaid, lateForCancelled }) => {
+  if (alreadyPaid) return 'Paid online after it was already paid; refund needed';
+  if (lateForCancelled) return 'Paid after the booking was cancelled; refund needed';
+  return null;
+};
+
 const invalidSignature = () => new AppError('INVALID_SIGNATURE', 401, 'Webhook signature is invalid');
 
 const parseEvent = (rawBody) => {
@@ -194,13 +201,26 @@ const handleWebhook = async ({ rawBody, signatureHeader }) => {
     }
     if (payment.status === 'PAID') return { result: { status: 'already_paid' }, emails: [] };
 
-    await paymentRepository.markPaid(payment.id, tx);
+    // Same per-instructor lock as cash recording, then a fresh read, so cash and
+    // this webhook cannot both settle the same booking.
+    const { instructorId } = await bookingRepository.findById(payment.bookingId, tx);
+    if (instructorId) await userRepository.lockUser(tx, instructorId);
     const booking = await bookingRepository.findById(payment.bookingId, tx);
     let lateForCancelled = booking.status === 'CANCELLED';
+    let alreadyPaid = false;
     if (payment.clientPackageId) {
-      const pkg = await packagePayment.applyPayment(tx, payment.clientPackageId, payment.amount);
-      lateForCancelled = pkg.status === 'CANCELLED';
+      await clientPackageRepository.lock(tx, payment.clientPackageId);
+      const pkg = await clientPackageRepository.findById(payment.clientPackageId, tx);
+      const applied = Math.min(Number(payment.amount), packagePayment.balanceOf(pkg));
+      alreadyPaid = applied < Number(payment.amount);
+      const updated = applied > 0 ? await packagePayment.applyPayment(tx, pkg.id, applied) : pkg;
+      lateForCancelled = updated.status === 'CANCELLED';
     } else {
+      alreadyPaid = booking.paymentStatus === 'PAID' || Boolean(await paymentRepository.findPaidForBooking(booking.id, tx));
+    }
+    // PayMongo has already taken the money, so the payment is always recorded.
+    await paymentRepository.markPaid(payment.id, tx);
+    if (!payment.clientPackageId && !alreadyPaid) {
       await bookingRepository.update(
         booking.id,
         { paymentMethod: 'ONLINE', paymentStatus: 'PAID', paymentDueAt: null },
@@ -209,14 +229,14 @@ const handleWebhook = async ({ rawBody, signatureHeader }) => {
     }
     await bookingAction.addHistory(tx, booking, SYSTEM_ACTOR, {
       action: 'PAYMENT_RECEIVED',
-      reason: lateForCancelled ? 'Paid after the booking was cancelled; refund needed' : null,
+      reason: refundReason({ alreadyPaid, lateForCancelled }),
     });
     await auditService.record(tx, {
       actor: SYSTEM_ACTOR,
       action: 'ONLINE_PAYMENT_RECEIVED',
       targetType: 'PAYMENT',
       targetId: payment.id,
-      metadata: { bookingId: booking.id, eventId: event.id, provider: provider.NAME, amount: payment.amount.toString() },
+      metadata: { bookingId: booking.id, eventId: event.id, provider: provider.NAME, amount: payment.amount.toString(), refundNeeded: alreadyPaid || lateForCancelled },
     });
 
     const when = notificationService.formatWhen(booking.scheduledAt);
@@ -225,10 +245,12 @@ const handleWebhook = async ({ rawBody, signatureHeader }) => {
         user: booking.client,
         type: 'PAYMENT_RECEIVED',
         title: 'Payment received',
-        message: `We received your online payment for the ${booking.lessonType} lesson on ${when}.`,
+        message: alreadyPaid
+          ? `We received your online payment for the ${booking.lessonType} lesson on ${when}, but it was already paid. The extra payment will be refunded.`
+          : `We received your online payment for the ${booking.lessonType} lesson on ${when}.`,
         bookingId: booking.id,
       },
-      ...(booking.instructor
+      ...(booking.instructor && !alreadyPaid
         ? [
             {
               user: booking.instructor,
@@ -240,7 +262,7 @@ const handleWebhook = async ({ rawBody, signatureHeader }) => {
           ]
         : []),
     ]);
-    return { result: { status: 'paid', bookingId: booking.id }, emails: mails };
+    return { result: { status: alreadyPaid ? 'refund_needed' : 'paid', bookingId: booking.id }, emails: mails };
   });
 
   await emailService.sendAll(emails);

@@ -224,6 +224,32 @@ describe('cash recorded by the instructor', () => {
   });
 });
 
+describe('online payment arriving after cash was recorded', () => {
+  it('keeps the cash settlement, records the online money as a refund case, and tells the client', async () => {
+    const { instructor, client } = await setup();
+    mockCheckout();
+    const booking = (await book(client, instructor, 'CASH')).body.data.booking;
+    await request(app).post(`/api/v1/client/bookings/${booking.id}/pay`).set(auth(client)).expect(200);
+    await request(app).patch(`/api/v1/instructor/bookings/${booking.id}/confirm`).set(auth(instructor)).expect(200);
+    await request(app).post(`/api/v1/instructor/bookings/${booking.id}/cash`).set(auth(instructor)).send({}).expect(201);
+
+    const online = await prisma.payment.findFirst({ where: { method: 'Online' } });
+    const res = await sendWebhook(paidEvent(online.providerReference));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ status: 'refund_needed', bookingId: booking.id });
+    expect(await prisma.booking.findUnique({ where: { id: booking.id } })).toMatchObject({ paymentMethod: 'CASH', paymentStatus: 'PAID' });
+    expect((await prisma.payment.findUnique({ where: { id: online.id } })).status).toBe('PAID');
+    const history = await prisma.bookingHistory.findFirst({ where: { bookingId: booking.id, action: 'PAYMENT_RECEIVED' } });
+    expect(history.reason).toBe('Paid online after it was already paid; refund needed');
+    const audit = await prisma.auditLog.findFirst({ where: { action: 'ONLINE_PAYMENT_RECEIVED' } });
+    expect(audit.metadata).toMatchObject({ refundNeeded: true });
+    const note = await prisma.notification.findFirst({ where: { userId: client.id, type: 'PAYMENT_RECEIVED' } });
+    expect(note.message).toMatch(/will be refunded/);
+    expect(await prisma.notification.count({ where: { userId: instructor.id, type: 'PAYMENT_RECEIVED' } })).toBe(0);
+  });
+});
+
 describe('booking sweeper', () => {
   it('cancels expired online bookings and unconfirmed cash bookings close to the session, as System', async () => {
     const { instructor, client } = await setup();

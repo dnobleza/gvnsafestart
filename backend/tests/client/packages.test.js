@@ -238,6 +238,25 @@ describe('package payments', () => {
     expect(sessionPay.status).toBe(409);
   });
 
+  it('does not count an online payment twice when cash already covered the package', async () => {
+    const ctx = await setup();
+    mockCheckout();
+    const id = (await buy(ctx)).body.data.package.id;
+    await request(app).post(`/api/v1/client/packages/${id}/pay`).set(auth(ctx.client)).expect(200);
+    const session = await prisma.booking.findFirst({ where: { clientPackageId: id } });
+    await request(app).patch(`/api/v1/instructor/bookings/${session.id}/confirm`).set(auth(ctx.instructor)).expect(200);
+    await request(app).post(`/api/v1/instructor/bookings/${session.id}/cash`).set(auth(ctx.instructor)).send({}).expect(201);
+
+    const online = await prisma.payment.findFirst({ where: { method: 'Online' } });
+    const res = await paid(online.providerReference);
+
+    expect(res.body.data.status).toBe('refund_needed');
+    expect(await prisma.clientPackage.findUnique({ where: { id } })).toMatchObject({ paymentStatus: 'PAID' });
+    expect((await prisma.clientPackage.findUnique({ where: { id } })).amountPaid.toString()).toBe('7000');
+    const history = await prisma.bookingHistory.findFirst({ where: { bookingId: session.id, action: 'PAYMENT_RECEIVED' } });
+    expect(history.reason).toBe('Paid online after it was already paid; refund needed');
+  });
+
   it('expires an unpaid online reservation and cancels its sessions as System', async () => {
     const ctx = await setup();
     mockCheckout();
